@@ -1,15 +1,20 @@
-# ============================================================
-# EXCEL REKAP TOOLS - VERSI 2.0
-# ============================================================
-
 import os
 import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from openpyxl import load_workbook, Workbook
-from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+
+
+# ============================================================
+# EXCEL REKAP TOOLS V3.0
+# ============================================================
+
+APP_TITLE = "EXCEL REKAP TOOLS"
+APP_SUBTITLE = "Pengolahan & Rekap Data Excel"
+APP_VERSION = "v3.0"
 
 
 # ============================================================
@@ -23,199 +28,137 @@ def clean_text(value):
 
 
 def extract_percentage(value):
-
+    """
+    Mengambil angka persentase dari teks seperti:
+    PRS (10%)
+    Tugas1 (20%)
+    UTS (30%)
+    """
     if value is None:
         return 0
 
-    if isinstance(value, (int, float)):
+    text = str(value)
 
-        if 0 <= value <= 1:
-            return value * 100
-
-        return float(value)
-
-    text = str(value).strip()
-
-    match = re.search(
-        r'(\d+(?:\.\d+)?)\s*%',
-        text
-    )
+    match = re.search(r"\((\d+(?:\.\d+)?)\s*%\)", text)
 
     if match:
         return float(match.group(1))
 
-    try:
-
-        number = float(text)
-
-        if 0 <= number <= 1:
-            return number * 100
-
-        return number
-
-    except:
-        return 0
+    return 0
 
 
 def read_components_from_row5(ws):
-
-    components = {
-        "PRS": 0,
-        "Tugas1": 0,
-        "Tugas2": 0,
-        "Tugas3": 0,
-        "QUIZ": 0,
-        "Presnta": 0,
-        "LAB": 0,
-        "UTS": 0,
-        "UAS": 0
-    }
+    components = {}
 
     for cell in ws[5]:
+        value = clean_text(cell.value)
 
-        value = cell.value
-
-        if value is None:
+        if not value:
             continue
 
-        text = str(value).strip()
+        upper_value = value.upper()
 
-        percentage = extract_percentage(value)
+        if "PRS" in upper_value:
+            components["PRS"] = extract_percentage(value)
 
-        label = re.sub(
-            r'\(\s*\d+(?:\.\d+)?\s*%\s*\)',
-            '',
-            text
-        ).strip()
+        elif "TUGAS1" in upper_value:
+            components["Tugas1"] = extract_percentage(value)
 
-        normalized = re.sub(
-            r'[^A-Z0-9]',
-            '',
-            label.upper()
-        )
+        elif "TUGAS2" in upper_value:
+            components["Tugas2"] = extract_percentage(value)
 
-        if normalized == "PRS":
-            components["PRS"] = percentage
+        elif "TUGAS3" in upper_value:
+            components["Tugas3"] = extract_percentage(value)
 
-        elif normalized in ["TUGAS1", "TGS1"]:
-            components["Tugas1"] = percentage
+        elif "QUIZ" in upper_value or "KUIS" in upper_value:
+            components["QUIZ"] = extract_percentage(value)
 
-        elif normalized in ["TUGAS2", "TGS2"]:
-            components["Tugas2"] = percentage
+        elif "PRESNTA" in upper_value:
+            components["Presnta"] = extract_percentage(value)
 
-        elif normalized in ["TUGAS3", "TGS3"]:
-            components["Tugas3"] = percentage
+        elif "LAB" in upper_value:
+            components["LAB"] = extract_percentage(value)
 
-        elif normalized in ["QUIZ", "KUIS"]:
-            components["QUIZ"] = percentage
+        elif "UTS" in upper_value:
+            components["UTS"] = extract_percentage(value)
 
-        elif normalized in [
-            "PRESNTA",
-            "PRESENTA",
-            "PRESENTASI"
-        ]:
-            components["Presnta"] = percentage
-
-        elif normalized == "LAB":
-            components["LAB"] = percentage
-
-        elif normalized == "UTS":
-            components["UTS"] = percentage
-
-        elif normalized == "UAS":
-            components["UAS"] = percentage
+        elif "UAS" in upper_value:
+            components["UAS"] = extract_percentage(value)
 
     return components
 
 
-# ============================================================
-# FORMAT EXCEL
-# ============================================================
-
 def format_worksheet(ws):
+    """
+    Formatting umum untuk output Excel.
+    """
 
+    # Header
     for cell in ws[1]:
-
-        cell.font = Font(bold=True)
-
-        cell.alignment = Alignment(
-            horizontal="center",
-            vertical="center"
-        )
-
+        cell.font = Font(bold=True, color="FFFFFF")
         cell.fill = PatternFill(
             "solid",
-            fgColor="D9EAF7"
+            fgColor="1F4E78"
+        )
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True
         )
 
+    # Border
     thin = Side(
         style="thin",
-        color="000000"
-    )
-
-    border = Border(
-        left=thin,
-        right=thin,
-        top=thin,
-        bottom=thin
+        color="D9E2F3"
     )
 
     for row in ws.iter_rows():
-
         for cell in row:
-
-            cell.border = border
-
+            cell.border = Border(
+                left=thin,
+                right=thin,
+                top=thin,
+                bottom=thin
+            )
             cell.alignment = Alignment(
-                vertical="center"
+                vertical="center",
+                wrap_text=True
             )
 
+    # Freeze header
     ws.freeze_panes = "A2"
 
-    if ws.max_row > 1 and ws.max_column > 1:
-        ws.auto_filter.ref = ws.dimensions
-
+    # Auto width
     for column_cells in ws.columns:
-
         max_length = 0
-
         column_letter = get_column_letter(
             column_cells[0].column
         )
 
         for cell in column_cells:
-
             try:
+                length = len(str(cell.value)) if cell.value is not None else 0
 
-                length = len(
-                    str(cell.value)
-                )
+                if length > max_length:
+                    max_length = length
 
-                max_length = max(
-                    max_length,
-                    length
-                )
-
-            except:
+            except Exception:
                 pass
 
-        ws.column_dimensions[
-            column_letter
-        ].width = min(
-            max_length + 2,
+        ws.column_dimensions[column_letter].width = min(
+            max(max_length + 2, 12),
             40
         )
 
-    ws.row_dimensions[1].height = 30
+    ws.row_dimensions[1].height = 35
 
 
 # ============================================================
-# MODUL 1
+# MODULE 1
 # REKAP MATA KULIAH & EVALUASI
 # ============================================================
 
 def process_excel(input_file, output_file):
-
     wb = load_workbook(
         input_file,
         data_only=False
@@ -223,47 +166,34 @@ def process_excel(input_file, output_file):
 
     output_wb = Workbook()
 
-    default_sheet = output_wb.active
+    ws_rekap = output_wb.active
+    ws_rekap.title = "Rekap Utama"
 
-    output_wb.remove(default_sheet)
-
-    # ========================================================
-    # REKAP UTAMA
-    # ========================================================
-
-    ws_rekap = output_wb.create_sheet(
-        "Rekap Utama"
-    )
-
-    headers = [
+    headers_rekap = [
         "No",
         "Nama Kelas",
         "Kode Matkul",
         "Nama Matkul",
-        "PRS (%)",
-        "Tugas1 (%)",
-        "Tugas2 (%)",
-        "Tugas3 (%)",
-        "QUIZ (%)",
-        "Presnta (%)",
-        "LAB (%)",
-        "UTS (%)",
-        "UAS (%)",
-        "Total (%)",
+        "PRS",
+        "Tugas1",
+        "Tugas2",
+        "Tugas3",
+        "QUIZ",
+        "Presnta",
+        "LAB",
+        "UTS",
+        "UAS",
+        "Total",
         "Status"
     ]
 
-    ws_rekap.append(headers)
-
-    # ========================================================
-    # EVALUASI DETAIL
-    # ========================================================
+    ws_rekap.append(headers_rekap)
 
     ws_eval = output_wb.create_sheet(
         "Evaluasi Detail"
     )
 
-    eval_headers = [
+    headers_eval = [
         "No",
         "Nama Kelas",
         "Kode Matkul",
@@ -271,17 +201,13 @@ def process_excel(input_file, output_file):
         "Basis Evaluasi",
         "Komponen Evaluasi",
         "Bobot (%)",
-        "Nama (Inggris)"
+        "Nama (Inggris)",
+        "Status Konversi"
     ]
 
-    ws_eval.append(eval_headers)
+    ws_eval.append(headers_eval)
 
     nomor = 1
-    nomor_eval = 1
-
-    # ========================================================
-    # BACA SEMUA SHEET
-    # ========================================================
 
     for ws in wb.worksheets:
 
@@ -299,33 +225,32 @@ def process_excel(input_file, output_file):
 
         components = read_components_from_row5(ws)
 
-        prs = components["PRS"]
-        tugas1 = components["Tugas1"]
-        tugas2 = components["Tugas2"]
-        tugas3 = components["Tugas3"]
-        quiz = components["QUIZ"]
-        presnta = components["Presnta"]
-        lab = components["LAB"]
-        uts = components["UTS"]
-        uas = components["UAS"]
+        prs = components.get("PRS", 0)
+        tugas1 = components.get("Tugas1", 0)
+        tugas2 = components.get("Tugas2", 0)
+        tugas3 = components.get("Tugas3", 0)
+        quiz = components.get("QUIZ", 0)
+        presnta = components.get("Presnta", 0)
+        lab = components.get("LAB", 0)
+        uts = components.get("UTS", 0)
+        uas = components.get("UAS", 0)
 
         total = (
-            prs +
-            tugas1 +
-            tugas2 +
-            tugas3 +
-            quiz +
-            presnta +
-            lab +
-            uts +
-            uas
+            prs
+            + tugas1
+            + tugas2
+            + tugas3
+            + quiz
+            + presnta
+            + lab
+            + uts
+            + uas
         )
 
-        status = (
-            "VALID"
-            if abs(total - 100) < 0.01
-            else "CEK"
-        )
+        if abs(total - 100) < 0.01:
+            status = "OK"
+        else:
+            status = "Perlu Review"
 
         ws_rekap.append([
             nomor,
@@ -345,184 +270,124 @@ def process_excel(input_file, output_file):
             status
         ])
 
-        # ====================================================
-        # KONVERSI EVALUASI
-        # ====================================================
+        # ----------------------------------------------------
+        # Evaluasi Detail
+        # ----------------------------------------------------
 
-        tugas_total = (
-            tugas1 +
-            tugas2 +
-            tugas3
-        )
-
-        project_total = (
-            presnta +
-            lab
-        )
-
-        evaluasi = [
-
-            [
-                2,
-                "",
-                prs,
-                "Participatory Activity"
-            ],
-
-            [
-                4,
-                "TGS",
-                tugas_total,
-                "Assignment"
-            ],
-
-            [
-                4,
-                "QUIZ",
-                quiz,
-                "Quiz"
-            ],
-
-            [
-                3,
-                "",
-                project_total,
-                "Project Outcomes"
-            ],
-
-            [
-                4,
-                "UTS",
-                uts,
-                "Midterm Exam"
-            ],
-
-            [
-                4,
-                "UAS",
-                uas,
-                "Finalterm Exam"
-            ]
-        ]
-
-        for item in evaluasi:
-
+        # PRS
+        if prs > 0:
             ws_eval.append([
-                nomor_eval,
+                nomor,
                 nama_kelas,
                 kode_matkul,
                 nama_matkul,
-                item[0],
-                item[1],
-                item[2],
-                item[3]
+                2,
+                "",
+                prs,
+                "Participatory Activity",
+                "OK"
             ])
 
-            nomor_eval += 1
+        # Tugas
+        for tugas_name, tugas_value in [
+            ("Tugas1", tugas1),
+            ("Tugas2", tugas2),
+            ("Tugas3", tugas3)
+        ]:
+
+            if tugas_value > 0:
+                ws_eval.append([
+                    nomor,
+                    nama_kelas,
+                    kode_matkul,
+                    nama_matkul,
+                    4,
+                    "TGS",
+                    tugas_value,
+                    "Assignment",
+                    "OK"
+                ])
+
+        # Quiz
+        if quiz > 0:
+            ws_eval.append([
+                nomor,
+                nama_kelas,
+                kode_matkul,
+                nama_matkul,
+                4,
+                "QUIZ",
+                quiz,
+                "Quiz",
+                "OK"
+            ])
+
+        # Presnta
+        if presnta > 0:
+            ws_eval.append([
+                nomor,
+                nama_kelas,
+                kode_matkul,
+                nama_matkul,
+                3,
+                "",
+                presnta,
+                "Project Outcomes",
+                "Provisional"
+            ])
+
+        # LAB
+        if lab > 0:
+            ws_eval.append([
+                nomor,
+                nama_kelas,
+                kode_matkul,
+                nama_matkul,
+                3,
+                "",
+                lab,
+                "Project Outcomes",
+                "Provisional"
+            ])
+
+        # UTS
+        if uts > 0:
+            ws_eval.append([
+                nomor,
+                nama_kelas,
+                kode_matkul,
+                nama_matkul,
+                4,
+                "UTS",
+                uts,
+                "Midterm Exam",
+                "OK"
+            ])
+
+        # UAS
+        if uas > 0:
+            ws_eval.append([
+                nomor,
+                nama_kelas,
+                kode_matkul,
+                nama_matkul,
+                4,
+                "UAS",
+                uas,
+                "Finalterm Exam",
+                "OK"
+            ])
 
         nomor += 1
 
-    # ========================================================
-    # FORMAT
-    # ========================================================
-
     format_worksheet(ws_rekap)
     format_worksheet(ws_eval)
-
-    # ========================================================
-    # FORMAT ANGKA
-    # ========================================================
-
-    for row in ws_rekap.iter_rows(
-        min_row=2,
-        min_col=5,
-        max_col=14
-    ):
-
-        for cell in row:
-            cell.number_format = "0.00"
-
-    for row in ws_eval.iter_rows(
-        min_row=2,
-        min_col=7,
-        max_col=7
-    ):
-
-        for cell in row:
-            cell.number_format = "0.00"
-
-    # ========================================================
-    # STATUS KONVERSI
-    # ========================================================
-
-    ws_eval["I1"] = "Status Konversi"
-
-    row = 2
-
-    while row <= ws_eval.max_row:
-
-        nama_kelas = ws_eval.cell(
-            row,
-            2
-        ).value
-
-        kode_matkul = ws_eval.cell(
-            row,
-            3
-        ).value
-
-        total_eval = 0
-
-        current = row
-
-        while current <= ws_eval.max_row:
-
-            if (
-                ws_eval.cell(
-                    current,
-                    2
-                ).value == nama_kelas
-                and
-                ws_eval.cell(
-                    current,
-                    3
-                ).value == kode_matkul
-            ):
-
-                value = (
-                    ws_eval.cell(
-                        current,
-                        7
-                    ).value
-                    or 0
-                )
-
-                total_eval += float(value)
-
-                current += 1
-
-            else:
-
-                break
-
-        status = (
-            "VALID"
-            if abs(total_eval - 100) < 0.01
-            else "CEK"
-        )
-
-        ws_eval.cell(
-            row,
-            9
-        ).value = status
-
-        row = current
 
     output_wb.save(output_file)
 
 
 # ============================================================
-# MODUL 2
+# MODULE 2
 # REKAP MATA KULIAH & DOSEN
 # ============================================================
 
@@ -535,9 +400,8 @@ def process_matkul_dosen(input_file, output_file):
 
     output_wb = Workbook()
 
-    ws = output_wb.active
-
-    ws.title = "Rekap Mata Kuliah Dosen"
+    ws_out = output_wb.active
+    ws_out.title = "Rekap Mata Kuliah Dosen"
 
     headers = [
         "No",
@@ -548,37 +412,31 @@ def process_matkul_dosen(input_file, output_file):
         "Nama Dosen"
     ]
 
-    ws.append(headers)
+    ws_out.append(headers)
 
     nomor = 1
 
-    for source_ws in wb.worksheets:
+    for ws in wb.worksheets:
 
-        try:
+        nama_kelas = clean_text(
+            ws["C6"].value
+        )
 
-            nama_kelas = clean_text(
-                source_ws["C6"].value
-            )
+        kode_mk = clean_text(
+            ws["D6"].value
+        )
 
-            kode_mk = clean_text(
-                source_ws["D6"].value
-            )
+        nama_mk = clean_text(
+            ws["E6"].value
+        )
 
-            nama_mk = clean_text(
-                source_ws["E6"].value
-            )
+        nama_dosen = clean_text(
+            ws["L2"].value
+        )
 
-            nama_dosen = clean_text(
-                source_ws["L2"].value
-            )
-
-        except Exception:
-
-            continue
-
-        ws.append([
+        ws_out.append([
             nomor,
-            source_ws.title,
+            ws.title,
             kode_mk,
             nama_mk,
             nama_kelas,
@@ -587,14 +445,14 @@ def process_matkul_dosen(input_file, output_file):
 
         nomor += 1
 
-    format_worksheet(ws)
+    format_worksheet(ws_out)
 
     output_wb.save(output_file)
 
 
 # ============================================================
-# MODUL 3
-# MERGE SEMUA SHEET MULAI BARIS KE-5
+# MODULE 3
+# MERGE SEMUA SHEET
 # ============================================================
 
 def process_merge_sheets(input_file, output_file):
@@ -606,56 +464,75 @@ def process_merge_sheets(input_file, output_file):
 
     output_wb = Workbook()
 
-    ws_output = output_wb.active
+    ws_out = output_wb.active
+    ws_out.title = "Merge Semua Sheet"
 
-    ws_output.title = "Merge Semua Sheet"
+    all_rows = []
+    max_columns = 0
 
-    first_sheet = True
+    # Ambil seluruh data mulai baris ke-5
+    for ws in wb.worksheets:
 
-    output_row = 1
+        for row in ws.iter_rows(
+            min_row=5,
+            max_row=ws.max_row,
+            values_only=True
+        ):
 
-    for source_ws in wb.worksheets:
+            values = list(row)
 
-        max_row = source_ws.max_row
-        max_col = source_ws.max_column
-
-        # Mulai dari baris ke-5
-        for row_idx in range(5, max_row + 1):
-
-            values = []
-
-            for col_idx in range(1, max_col + 1):
-
-                values.append(
-                    source_ws.cell(
-                        row_idx,
-                        col_idx
-                    ).value
-                )
-
-            # Tambahkan Nama Sheet
-            values.append(source_ws.title)
-
-            # Abaikan baris yang benar-benar kosong
-            if all(
-                value is None
-                for value in values[:-1]
+            # Skip baris kosong
+            if not any(
+                value is not None and str(value).strip() != ""
+                for value in values
             ):
                 continue
 
-            for col_idx, value in enumerate(
-                values,
-                start=1
-            ):
+            all_rows.append(
+                values + [ws.title]
+            )
 
-                ws_output.cell(
-                    output_row,
-                    col_idx
-                ).value = value
+            if len(values) > max_columns:
+                max_columns = len(values)
 
-            output_row += 1
+    # Header
+    if all_rows:
 
-    format_worksheet(ws_output)
+        first_row = all_rows[0]
+
+        headers = []
+
+        for i in range(
+            len(first_row) - 1
+        ):
+            headers.append(
+                f"Column {i + 1}"
+            )
+
+        headers.append("Nama Sheet")
+
+        ws_out.append(headers)
+
+        # Data
+        for row in all_rows:
+
+            normalized = row + [
+                None
+            ] * (
+                len(headers) - len(row)
+            )
+
+            ws_out.append(
+                normalized[:len(headers)]
+            )
+
+    else:
+
+        ws_out.append([
+            "Tidak ada data"
+        ])
+
+    format_worksheet(ws_out)
 
     output_wb.save(output_file)
 
@@ -671,222 +548,847 @@ class ExcelRekapApp:
         self.root = root
 
         self.root.title(
-            "Excel Rekap Tools"
+            f"{APP_TITLE} {APP_VERSION}"
         )
 
         self.root.geometry(
-            "700x560"
+            "1050x680"
         )
 
-        self.root.resizable(
-            False,
-            False
+        self.root.minsize(
+            900,
+            600
         )
 
-        self.input_file = ""
+        self.root.configure(
+            bg="#F4F7FB"
+        )
 
-        self.selected_module = 1
+        self.selected_file = ""
+        self.selected_module = 0
 
-        self.create_widgets()
+        self.setup_styles()
+        self.build_ui()
 
+        self.show_home()
 
     # ========================================================
-    # GUI
+    # STYLE
     # ========================================================
 
-    def create_widgets(self):
+    def setup_styles(self):
 
-        title = tk.Label(
+        style = ttk.Style()
+
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+
+        style.configure(
+            "TProgressbar",
+            thickness=8
+        )
+
+        style.configure(
+            "Modern.TButton",
+            font=(
+                "Segoe UI",
+                10,
+                "bold"
+            ),
+            padding=10
+        )
+
+    # ========================================================
+    # MAIN UI
+    # ========================================================
+
+    def build_ui(self):
+
+        # ====================================================
+        # HEADER
+        # ====================================================
+
+        self.header = tk.Frame(
             self.root,
-            text="EXCEL REKAP TOOLS",
-            font=("Arial", 20, "bold")
+            bg="#17365D",
+            height=85
         )
 
-        title.pack(
-            pady=(20, 5)
-        )
-
-        subtitle = tk.Label(
-            self.root,
-            text="Pengolahan & Rekap Data Excel",
-            font=("Arial", 11)
-        )
-
-        subtitle.pack(
-            pady=(0, 15)
-        )
-
-        module_frame = tk.LabelFrame(
-            self.root,
-            text="Pilih Modul",
-            font=("Arial", 11, "bold"),
-            padx=15,
-            pady=10
-        )
-
-        module_frame.pack(
-            padx=30,
+        self.header.pack(
+            side="top",
             fill="x"
         )
 
-        self.module_var = tk.IntVar(
-            value=1
+        self.header.pack_propagate(
+            False
         )
 
-        modules = [
-            (
-                1,
-                "Rekap Mata Kuliah & Evaluasi"
+        title_frame = tk.Frame(
+            self.header,
+            bg="#17365D"
+        )
+
+        title_frame.pack(
+            side="left",
+            padx=25
+        )
+
+        tk.Label(
+            title_frame,
+            text="📊",
+            font=(
+                "Segoe UI Emoji",
+                28
             ),
-            (
-                2,
-                "Rekap Mata Kuliah & Dosen"
+            bg="#17365D",
+            fg="white"
+        ).pack(
+            side="left",
+            padx=(0, 12)
+        )
+
+        text_frame = tk.Frame(
+            title_frame,
+            bg="#17365D"
+        )
+
+        text_frame.pack(
+            side="left"
+        )
+
+        tk.Label(
+            text_frame,
+            text=APP_TITLE,
+            font=(
+                "Segoe UI",
+                19,
+                "bold"
             ),
-            (
-                3,
-                "Merge Semua Sheet"
-            )
-        ]
+            bg="#17365D",
+            fg="white"
+        ).pack(
+            anchor="w"
+        )
 
-        for value, text in modules:
+        tk.Label(
+            text_frame,
+            text=APP_SUBTITLE,
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="#17365D",
+            fg="#D9EAF7"
+        ).pack(
+            anchor="w"
+        )
 
-            rb = tk.Radiobutton(
-                module_frame,
-                text=text,
-                variable=self.module_var,
-                value=value,
-                command=self.module_changed,
-                font=("Arial", 11),
-                anchor="w"
-            )
+        tk.Label(
+            self.header,
+            text=APP_VERSION,
+            font=(
+                "Segoe UI",
+                10,
+                "bold"
+            ),
+            bg="#17365D",
+            fg="#B8D8F0"
+        ).pack(
+            side="right",
+            padx=25
+        )
 
-            rb.pack(
-                fill="x",
-                pady=4
-            )
+        # ====================================================
+        # BODY
+        # ====================================================
 
-        frame = tk.Frame(
+        body = tk.Frame(
             self.root,
-            padx=30
+            bg="#F4F7FB"
         )
 
-        frame.pack(
+        body.pack(
             fill="both",
             expand=True
         )
 
-        self.selected_label = tk.Label(
-            frame,
-            text="Modul aktif: Rekap Mata Kuliah & Evaluasi",
-            font=("Arial", 12, "bold")
+        # ====================================================
+        # SIDEBAR
+        # ====================================================
+
+        self.sidebar = tk.Frame(
+            body,
+            bg="#102A43",
+            width=220
         )
 
-        self.selected_label.pack(
-            pady=(20, 12)
+        self.sidebar.pack(
+            side="left",
+            fill="y"
         )
 
-        self.file_label = tk.Label(
-            frame,
-            text="Belum ada file Excel yang dipilih",
+        self.sidebar.pack_propagate(
+            False
+        )
+
+        tk.Label(
+            self.sidebar,
+            text="MENU UTAMA",
+            font=(
+                "Segoe UI",
+                9,
+                "bold"
+            ),
+            bg="#102A43",
+            fg="#9FB3C8"
+        ).pack(
             anchor="w",
-            relief="sunken",
-            padx=10
+            padx=20,
+            pady=(25, 10)
         )
 
-        self.file_label.pack(
+        self.create_menu_button(
+            "🏠  Beranda",
+            self.show_home
+        )
+
+        self.create_menu_button(
+            "📊  Rekap Evaluasi",
+            lambda: self.show_module(0)
+        )
+
+        self.create_menu_button(
+            "👨‍🏫  Rekap Dosen",
+            lambda: self.show_module(1)
+        )
+
+        self.create_menu_button(
+            "📑  Merge Sheet",
+            lambda: self.show_module(2)
+        )
+
+        tk.Frame(
+            self.sidebar,
+            bg="#102A43",
+            height=20
+        ).pack()
+
+        self.create_menu_button(
+            "ℹ️  Tentang",
+            self.show_about
+        )
+
+        # ====================================================
+        # CONTENT
+        # ====================================================
+
+        self.content = tk.Frame(
+            body,
+            bg="#F4F7FB"
+        )
+
+        self.content.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        # ====================================================
+        # FOOTER
+        # ====================================================
+
+        self.footer = tk.Frame(
+            self.root,
+            bg="#E8EEF5",
+            height=35
+        )
+
+        self.footer.pack(
+            side="bottom",
+            fill="x"
+        )
+
+        self.footer.pack_propagate(
+            False
+        )
+
+        self.status_label = tk.Label(
+            self.footer,
+            text="● Ready",
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="#E8EEF5",
+            fg="#486581"
+        )
+
+        self.status_label.pack(
+            side="left",
+            padx=20
+        )
+
+        tk.Label(
+            self.footer,
+            text=f"Excel Rekap Tools {APP_VERSION}",
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="#E8EEF5",
+            fg="#829AB1"
+        ).pack(
+            side="right",
+            padx=20
+        )
+
+    # ========================================================
+    # SIDEBAR BUTTON
+    # ========================================================
+
+    def create_menu_button(
+        self,
+        text,
+        command
+    ):
+
+        button = tk.Button(
+            self.sidebar,
+            text=text,
+            command=command,
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bg="#102A43",
+            fg="#FFFFFF",
+            activebackground="#1F4E78",
+            activeforeground="#FFFFFF",
+            bd=0,
+            relief="flat",
+            anchor="w",
+            padx=20,
+            pady=13,
+            cursor="hand2"
+        )
+
+        button.pack(
+            fill="x"
+        )
+
+        def on_enter(event):
+            button.configure(
+                bg="#1F4E78"
+            )
+
+        def on_leave(event):
+            button.configure(
+                bg="#102A43"
+            )
+
+        button.bind(
+            "<Enter>",
+            on_enter
+        )
+
+        button.bind(
+            "<Leave>",
+            on_leave
+        )
+
+    # ========================================================
+    # CLEAR CONTENT
+    # ========================================================
+
+    def clear_content(self):
+
+        for widget in self.content.winfo_children():
+            widget.destroy()
+
+    # ========================================================
+    # HOME
+    # ========================================================
+
+    def show_home(self):
+
+        self.clear_content()
+
+        self.status_label.config(
+            text="● Ready"
+        )
+
+        tk.Label(
+            self.content,
+            text="Selamat Datang",
+            font=(
+                "Segoe UI",
+                24,
+                "bold"
+            ),
+            bg="#F4F7FB",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=35,
+            pady=(35, 5)
+        )
+
+        tk.Label(
+            self.content,
+            text="Pilih salah satu tools untuk mulai mengolah data Excel.",
+            font=(
+                "Segoe UI",
+                11
+            ),
+            bg="#F4F7FB",
+            fg="#627D98"
+        ).pack(
+            anchor="w",
+            padx=35
+        )
+
+        cards = tk.Frame(
+            self.content,
+            bg="#F4F7FB"
+        )
+
+        cards.pack(
             fill="x",
+            padx=35,
+            pady=35
+        )
+
+        self.create_card(
+            cards,
+            0,
+            "📊",
+            "Rekap Evaluasi",
+            "Rekap mata kuliah dan\nkomponen evaluasi.",
+            "#1F4E78",
+            lambda: self.show_module(0)
+        )
+
+        self.create_card(
+            cards,
+            1,
+            "👨‍🏫",
+            "Rekap Dosen",
+            "Rekap mata kuliah,\nkelas, dan dosen.",
+            "#2E7D32",
+            lambda: self.show_module(1)
+        )
+
+        self.create_card(
+            cards,
+            2,
+            "📑",
+            "Merge Sheet",
+            "Menggabungkan data\ndari seluruh sheet.",
+            "#7B1FA2",
+            lambda: self.show_module(2)
+        )
+
+        info = tk.Frame(
+            self.content,
+            bg="white",
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#D9E2EC"
+        )
+
+        info.pack(
+            fill="x",
+            padx=35,
+            pady=(0, 20)
+        )
+
+        tk.Label(
+            info,
+            text="💡  Tips",
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            ),
+            bg="white",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=20,
+            pady=(15, 5)
+        )
+
+        tk.Label(
+            info,
+            text=(
+                "Pastikan file Excel yang dipilih memiliki struktur "
+                "data yang sesuai dengan tools yang digunakan."
+            ),
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bg="white",
+            fg="#627D98"
+        ).pack(
+            anchor="w",
+            padx=20,
+            pady=(0, 15)
+        )
+
+    # ========================================================
+    # CARD
+    # ========================================================
+
+    def create_card(
+        self,
+        parent,
+        column,
+        icon,
+        title,
+        description,
+        accent,
+        command
+    ):
+
+        card = tk.Frame(
+            parent,
+            bg="white",
+            width=220,
+            height=190,
+            highlightthickness=1,
+            highlightbackground="#D9E2EC"
+        )
+
+        card.grid(
+            row=0,
+            column=column,
+            padx=8,
+            sticky="nsew"
+        )
+
+        parent.grid_columnconfigure(
+            column,
+            weight=1
+        )
+
+        card.grid_propagate(
+            False
+        )
+
+        tk.Label(
+            card,
+            text=icon,
+            font=(
+                "Segoe UI Emoji",
+                30
+            ),
+            bg="white",
+            fg=accent
+        ).pack(
+            pady=(20, 5)
+        )
+
+        tk.Label(
+            card,
+            text=title,
+            font=(
+                "Segoe UI",
+                12,
+                "bold"
+            ),
+            bg="white",
+            fg="#17365D"
+        ).pack()
+
+        tk.Label(
+            card,
+            text=description,
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="white",
+            fg="#627D98",
+            justify="center"
+        ).pack(
+            pady=7
+        )
+
+        button = tk.Button(
+            card,
+            text="BUKA TOOL",
+            command=command,
+            font=(
+                "Segoe UI",
+                8,
+                "bold"
+            ),
+            bg=accent,
+            fg="white",
+            activebackground=accent,
+            activeforeground="white",
+            bd=0,
+            padx=15,
+            pady=7,
+            cursor="hand2"
+        )
+
+        button.pack(
+            pady=5
+        )
+
+    # ========================================================
+    # MODULE PAGE
+    # ========================================================
+
+    def show_module(
+        self,
+        module_index
+    ):
+
+        self.selected_module = module_index
+
+        self.clear_content()
+
+        modules = [
+            (
+                "📊",
+                "Rekap Mata Kuliah & Evaluasi",
+                "Mengolah komponen evaluasi dan bobot mata kuliah.",
+                "#1F4E78"
+            ),
+            (
+                "👨‍🏫",
+                "Rekap Mata Kuliah & Dosen",
+                "Mengambil data mata kuliah, kelas, dan dosen dari setiap sheet.",
+                "#2E7D32"
+            ),
+            (
+                "📑",
+                "Merge Semua Sheet",
+                "Menggabungkan seluruh data sheet mulai dari baris ke-5.",
+                "#7B1FA2"
+            )
+        ]
+
+        icon, title, description, accent = modules[
+            module_index
+        ]
+
+        # Title
+        tk.Label(
+            self.content,
+            text=f"{icon}  {title}",
+            font=(
+                "Segoe UI",
+                20,
+                "bold"
+            ),
+            bg="#F4F7FB",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=35,
+            pady=(30, 5)
+        )
+
+        tk.Label(
+            self.content,
+            text=description,
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bg="#F4F7FB",
+            fg="#627D98"
+        ).pack(
+            anchor="w",
+            padx=35
+        )
+
+        # Main panel
+        panel = tk.Frame(
+            self.content,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground="#D9E2EC"
+        )
+
+        panel.pack(
+            fill="x",
+            padx=35,
+            pady=30
+        )
+
+        # File input
+        tk.Label(
+            panel,
+            text="1. Pilih File Excel",
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            ),
+            bg="white",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=25,
+            pady=(25, 8)
+        )
+
+        file_frame = tk.Frame(
+            panel,
+            bg="white"
+        )
+
+        file_frame.pack(
+            fill="x",
+            padx=25
+        )
+
+        self.file_entry = tk.Entry(
+            file_frame,
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bd=1,
+            relief="solid",
+            bg="#F8FAFC"
+        )
+
+        self.file_entry.pack(
+            side="left",
+            fill="x",
+            expand=True,
             ipady=8
         )
 
-        btn_file = tk.Button(
-            frame,
-            text="PILIH FILE EXCEL",
+        tk.Button(
+            file_frame,
+            text="📂  Pilih File",
             command=self.choose_file,
-            width=25,
-            height=2
+            font=(
+                "Segoe UI",
+                9,
+                "bold"
+            ),
+            bg=accent,
+            fg="white",
+            activebackground=accent,
+            activeforeground="white",
+            bd=0,
+            padx=18,
+            pady=9,
+            cursor="hand2"
+        ).pack(
+            side="left",
+            padx=(10, 0)
         )
 
-        btn_file.pack(
-            pady=12
+        # Output
+        tk.Label(
+            panel,
+            text="2. Lokasi File Output",
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            ),
+            bg="white",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=25,
+            pady=(25, 8)
         )
 
+        output_names = [
+            "Rekap_Mata_Kuliah_dan_Evaluasi.xlsx",
+            "Rekap_Mata_Kuliah_dan_Dosen.xlsx",
+            "Merge_Semua_Sheet.xlsx"
+        ]
+
+        self.output_name = output_names[
+            module_index
+        ]
+
+        tk.Label(
+            panel,
+            text=f"File akan disimpan sebagai: {self.output_name}",
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="white",
+            fg="#829AB1"
+        ).pack(
+            anchor="w",
+            padx=25
+        )
+
+        # Process button
+        process_button = tk.Button(
+            panel,
+            text="▶  PROSES DATA",
+            command=self.process,
+            font=(
+                "Segoe UI",
+                11,
+                "bold"
+            ),
+            bg="#2E7D32",
+            fg="white",
+            activebackground="#256628",
+            activeforeground="white",
+            bd=0,
+            padx=30,
+            pady=12,
+            cursor="hand2"
+        )
+
+        process_button.pack(
+            pady=(25, 10)
+        )
+
+        # Progress
         self.progress = ttk.Progressbar(
-            frame,
+            panel,
             mode="indeterminate"
         )
 
         self.progress.pack(
             fill="x",
-            pady=5
+            padx=25,
+            pady=(5, 25)
         )
 
-        self.btn_process = tk.Button(
-            frame,
-            text="PROSES DATA",
-            command=self.process,
-            width=25,
-            height=2,
-            state="disabled"
+        self.module_status = tk.Label(
+            panel,
+            text="Siap. Silakan pilih file Excel.",
+            font=(
+                "Segoe UI",
+                9
+            ),
+            bg="white",
+            fg="#627D98"
         )
 
-        self.btn_process.pack(
-            pady=12
+        self.module_status.pack(
+            pady=(0, 20)
         )
-
-        self.status_label = tk.Label(
-            frame,
-            text="Status: Siap",
-            font=("Arial", 10)
-        )
-
-        self.status_label.pack(
-            pady=5
-        )
-
-        footer = tk.Label(
-            self.root,
-            text="Excel Rekap Tools v2.0",
-            font=("Arial", 9)
-        )
-
-        footer.pack(
-            pady=12
-        )
-
 
     # ========================================================
-    # PILIH MODUL
-    # ========================================================
-
-    def module_changed(self):
-
-        self.selected_module = self.module_var.get()
-
-        module_names = {
-            1: "Rekap Mata Kuliah & Evaluasi",
-            2: "Rekap Mata Kuliah & Dosen",
-            3: "Merge Semua Sheet"
-        }
-
-        self.selected_label.config(
-            text="Modul aktif: "
-            + module_names[
-                self.selected_module
-            ]
-        )
-
-        self.status_label.config(
-            text="Status: Siap"
-        )
-
-
-    # ========================================================
-    # PILIH FILE
+    # CHOOSE FILE
     # ========================================================
 
     def choose_file(self):
 
-        file = filedialog.askopenfilename(
+        file_path = filedialog.askopenfilename(
             title="Pilih File Excel",
             filetypes=[
                 (
@@ -900,54 +1402,48 @@ class ExcelRekapApp:
             ]
         )
 
-        if file:
+        if not file_path:
+            return
 
-            self.input_file = file
+        self.selected_file = file_path
 
-            filename = os.path.basename(
-                file
-            )
+        self.file_entry.delete(
+            0,
+            tk.END
+        )
 
-            self.file_label.config(
-                text=filename
-            )
+        self.file_entry.insert(
+            0,
+            file_path
+        )
 
-            self.btn_process.config(
-                state="normal"
-            )
+        self.module_status.config(
+            text="File berhasil dipilih."
+        )
 
-            self.status_label.config(
-                text="Status: File siap diproses"
-            )
-
+        self.status_label.config(
+            text="● File Excel dipilih"
+        )
 
     # ========================================================
-    # PROSES
+    # PROCESS
     # ========================================================
 
     def process(self):
 
-        if not self.input_file:
+        if not self.selected_file:
 
             messagebox.showwarning(
-                "Peringatan",
+                "File Belum Dipilih",
                 "Silakan pilih file Excel terlebih dahulu."
             )
 
             return
 
-        initial_names = {
-            1: "Rekap_Mata_Kuliah_dan_Evaluasi.xlsx",
-            2: "Rekap_Mata_Kuliah_dan_Dosen.xlsx",
-            3: "Merge_Semua_Sheet.xlsx"
-        }
-
         output_file = filedialog.asksaveasfilename(
-            title="Simpan Hasil Rekap",
+            title="Simpan File Output",
             defaultextension=".xlsx",
-            initialfile=initial_names[
-                self.selected_module
-            ],
+            initialfile=self.output_name,
             filetypes=[
                 (
                     "Excel Files",
@@ -961,82 +1457,192 @@ class ExcelRekapApp:
 
         try:
 
-            self.status_label.config(
-                text="Status: Sedang memproses..."
-            )
-
             self.progress.start(10)
 
-            self.btn_process.config(
-                state="disabled"
+            self.module_status.config(
+                text="Sedang memproses data..."
+            )
+
+            self.status_label.config(
+                text="● Processing..."
             )
 
             self.root.update_idletasks()
 
-            if self.selected_module == 1:
+            if self.selected_module == 0:
 
                 process_excel(
-                    self.input_file,
+                    self.selected_file,
+                    output_file
+                )
+
+            elif self.selected_module == 1:
+
+                process_matkul_dosen(
+                    self.selected_file,
                     output_file
                 )
 
             elif self.selected_module == 2:
 
-                process_matkul_dosen(
-                    self.input_file,
-                    output_file
-                )
-
-            elif self.selected_module == 3:
-
                 process_merge_sheets(
-                    self.input_file,
+                    self.selected_file,
                     output_file
                 )
 
             self.progress.stop()
 
-            self.btn_process.config(
-                state="normal"
+            self.module_status.config(
+                text="✓ Proses selesai dengan sukses."
             )
 
             self.status_label.config(
-                text="Status: Proses berhasil!"
+                text="● Selesai"
             )
 
             messagebox.showinfo(
                 "Berhasil",
-                "Rekap Excel berhasil dibuat!\n\n"
-                + output_file
+                "Data berhasil diproses!\n\n"
+                f"File output:\n{output_file}"
             )
 
         except Exception as e:
 
             self.progress.stop()
 
-            self.btn_process.config(
-                state="normal"
+            self.module_status.config(
+                text="✕ Terjadi kesalahan."
             )
 
             self.status_label.config(
-                text="Status: Terjadi kesalahan"
+                text="● Error"
             )
 
             messagebox.showerror(
                 "Error",
                 "Terjadi kesalahan saat memproses file:\n\n"
-                + str(e)
+                f"{str(e)}"
             )
+
+    # ========================================================
+    # ABOUT
+    # ========================================================
+
+    def show_about(self):
+
+        self.clear_content()
+
+        tk.Label(
+            self.content,
+            text="ℹ️  Tentang Aplikasi",
+            font=(
+                "Segoe UI",
+                22,
+                "bold"
+            ),
+            bg="#F4F7FB",
+            fg="#17365D"
+        ).pack(
+            anchor="w",
+            padx=35,
+            pady=(35, 20)
+        )
+
+        panel = tk.Frame(
+            self.content,
+            bg="white",
+            highlightthickness=1,
+            highlightbackground="#D9E2EC"
+        )
+
+        panel.pack(
+            fill="x",
+            padx=35
+        )
+
+        tk.Label(
+            panel,
+            text="📊",
+            font=(
+                "Segoe UI Emoji",
+                45
+            ),
+            bg="white"
+        ).pack(
+            pady=(30, 5)
+        )
+
+        tk.Label(
+            panel,
+            text=APP_TITLE,
+            font=(
+                "Segoe UI",
+                20,
+                "bold"
+            ),
+            bg="white",
+            fg="#17365D"
+        ).pack()
+
+        tk.Label(
+            panel,
+            text=APP_SUBTITLE,
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bg="white",
+            fg="#627D98"
+        ).pack(
+            pady=5
+        )
+
+        tk.Label(
+            panel,
+            text=APP_VERSION,
+            font=(
+                "Segoe UI",
+                10,
+                "bold"
+            ),
+            bg="white",
+            fg="#2E7D32"
+        ).pack(
+            pady=5
+        )
+
+        tk.Label(
+            panel,
+            text=(
+                "\nAplikasi untuk membantu pengolahan dan "
+                "rekapitulasi data akademik berbasis Excel.\n\n"
+                "Modul yang tersedia:\n"
+                "• Rekap Mata Kuliah & Evaluasi\n"
+                "• Rekap Mata Kuliah & Dosen\n"
+                "• Merge Semua Sheet"
+            ),
+            font=(
+                "Segoe UI",
+                10
+            ),
+            bg="white",
+            fg="#486581",
+            justify="center"
+        ).pack(
+            pady=(10, 30)
+        )
 
 
 # ============================================================
-# START APPLICATION
+# MAIN
 # ============================================================
 
 if __name__ == "__main__":
 
     root = tk.Tk()
 
-    app = ExcelRekapApp(root)
+    app = ExcelRekapApp(
+        root
+    )
 
     root.mainloop()
