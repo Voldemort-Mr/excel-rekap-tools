@@ -1,6 +1,5 @@
-
 # ============================================================
-# EXCEL REKAP TOOLS - VERSI 1.0
+# EXCEL REKAP TOOLS - VERSI 2.0
 # ============================================================
 
 import os
@@ -12,6 +11,10 @@ from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
 from openpyxl.utils import get_column_letter
 
+
+# ============================================================
+# UTILITIES
+# ============================================================
 
 def clean_text(value):
     if value is None:
@@ -125,6 +128,10 @@ def read_components_from_row5(ws):
     return components
 
 
+# ============================================================
+# FORMAT EXCEL
+# ============================================================
+
 def format_worksheet(ws):
 
     for cell in ws[1]:
@@ -165,7 +172,8 @@ def format_worksheet(ws):
 
     ws.freeze_panes = "A2"
 
-    ws.auto_filter.ref = ws.dimensions
+    if ws.max_row > 1 and ws.max_column > 1:
+        ws.auto_filter.ref = ws.dimensions
 
     for column_cells in ws.columns:
 
@@ -200,6 +208,11 @@ def format_worksheet(ws):
 
     ws.row_dimensions[1].height = 30
 
+
+# ============================================================
+# MODUL 1
+# REKAP MATA KULIAH & EVALUASI
+# ============================================================
 
 def process_excel(input_file, output_file):
 
@@ -509,7 +522,146 @@ def process_excel(input_file, output_file):
 
 
 # ============================================================
-# GUI
+# MODUL 2
+# REKAP MATA KULIAH & DOSEN
+# ============================================================
+
+def process_matkul_dosen(input_file, output_file):
+
+    wb = load_workbook(
+        input_file,
+        data_only=True
+    )
+
+    output_wb = Workbook()
+
+    ws = output_wb.active
+
+    ws.title = "Rekap Mata Kuliah Dosen"
+
+    headers = [
+        "No",
+        "Nama Sheet",
+        "Kode Mata Kuliah",
+        "Nama Mata Kuliah",
+        "Nama Kelas",
+        "Nama Dosen"
+    ]
+
+    ws.append(headers)
+
+    nomor = 1
+
+    for source_ws in wb.worksheets:
+
+        try:
+
+            nama_kelas = clean_text(
+                source_ws["C6"].value
+            )
+
+            kode_mk = clean_text(
+                source_ws["D6"].value
+            )
+
+            nama_mk = clean_text(
+                source_ws["E6"].value
+            )
+
+            nama_dosen = clean_text(
+                source_ws["L2"].value
+            )
+
+        except Exception:
+
+            continue
+
+        ws.append([
+            nomor,
+            source_ws.title,
+            kode_mk,
+            nama_mk,
+            nama_kelas,
+            nama_dosen
+        ])
+
+        nomor += 1
+
+    format_worksheet(ws)
+
+    output_wb.save(output_file)
+
+
+# ============================================================
+# MODUL 3
+# MERGE SEMUA SHEET MULAI BARIS KE-5
+# ============================================================
+
+def process_merge_sheets(input_file, output_file):
+
+    wb = load_workbook(
+        input_file,
+        data_only=True
+    )
+
+    output_wb = Workbook()
+
+    ws_output = output_wb.active
+
+    ws_output.title = "Merge Semua Sheet"
+
+    first_sheet = True
+
+    output_row = 1
+
+    for source_ws in wb.worksheets:
+
+        max_row = source_ws.max_row
+        max_col = source_ws.max_column
+
+        # Mulai dari baris ke-5
+        for row_idx in range(5, max_row + 1):
+
+            values = []
+
+            for col_idx in range(1, max_col + 1):
+
+                values.append(
+                    source_ws.cell(
+                        row_idx,
+                        col_idx
+                    ).value
+                )
+
+            # Tambahkan Nama Sheet
+            values.append(source_ws.title)
+
+            # Abaikan baris yang benar-benar kosong
+            if all(
+                value is None
+                for value in values[:-1]
+            ):
+                continue
+
+            for col_idx, value in enumerate(
+                values,
+                start=1
+            ):
+
+                ws_output.cell(
+                    output_row,
+                    col_idx
+                ).value = value
+
+            output_row += 1
+
+    format_worksheet(ws_output)
+
+    output_wb.save(output_file)
+
+
+# ============================================================
+# GUI APPLICATION
 # ============================================================
 
 class ExcelRekapApp:
@@ -523,7 +675,7 @@ class ExcelRekapApp:
         )
 
         self.root.geometry(
-            "650x430"
+            "700x560"
         )
 
         self.root.resizable(
@@ -533,8 +685,14 @@ class ExcelRekapApp:
 
         self.input_file = ""
 
+        self.selected_module = 1
+
         self.create_widgets()
 
+
+    # ========================================================
+    # GUI
+    # ========================================================
 
     def create_widgets(self):
 
@@ -545,7 +703,7 @@ class ExcelRekapApp:
         )
 
         title.pack(
-            pady=(25, 5)
+            pady=(20, 5)
         )
 
         subtitle = tk.Label(
@@ -555,8 +713,57 @@ class ExcelRekapApp:
         )
 
         subtitle.pack(
-            pady=(0, 25)
+            pady=(0, 15)
         )
+
+        module_frame = tk.LabelFrame(
+            self.root,
+            text="Pilih Modul",
+            font=("Arial", 11, "bold"),
+            padx=15,
+            pady=10
+        )
+
+        module_frame.pack(
+            padx=30,
+            fill="x"
+        )
+
+        self.module_var = tk.IntVar(
+            value=1
+        )
+
+        modules = [
+            (
+                1,
+                "Rekap Mata Kuliah & Evaluasi"
+            ),
+            (
+                2,
+                "Rekap Mata Kuliah & Dosen"
+            ),
+            (
+                3,
+                "Merge Semua Sheet"
+            )
+        ]
+
+        for value, text in modules:
+
+            rb = tk.Radiobutton(
+                module_frame,
+                text=text,
+                variable=self.module_var,
+                value=value,
+                command=self.module_changed,
+                font=("Arial", 11),
+                anchor="w"
+            )
+
+            rb.pack(
+                fill="x",
+                pady=4
+            )
 
         frame = tk.Frame(
             self.root,
@@ -568,14 +775,14 @@ class ExcelRekapApp:
             expand=True
         )
 
-        module = tk.Label(
+        self.selected_label = tk.Label(
             frame,
-            text="REKAP MATA KULIAH & EVALUASI",
-            font=("Arial", 13, "bold")
+            text="Modul aktif: Rekap Mata Kuliah & Evaluasi",
+            font=("Arial", 12, "bold")
         )
 
-        module.pack(
-            pady=(5, 20)
+        self.selected_label.pack(
+            pady=(20, 12)
         )
 
         self.file_label = tk.Label(
@@ -600,7 +807,7 @@ class ExcelRekapApp:
         )
 
         btn_file.pack(
-            pady=15
+            pady=12
         )
 
         self.progress = ttk.Progressbar(
@@ -623,7 +830,7 @@ class ExcelRekapApp:
         )
 
         self.btn_process.pack(
-            pady=15
+            pady=12
         )
 
         self.status_label = tk.Label(
@@ -638,14 +845,44 @@ class ExcelRekapApp:
 
         footer = tk.Label(
             self.root,
-            text="Excel Rekap Tools v1.0",
+            text="Excel Rekap Tools v2.0",
             font=("Arial", 9)
         )
 
         footer.pack(
-            pady=15
+            pady=12
         )
 
+
+    # ========================================================
+    # PILIH MODUL
+    # ========================================================
+
+    def module_changed(self):
+
+        self.selected_module = self.module_var.get()
+
+        module_names = {
+            1: "Rekap Mata Kuliah & Evaluasi",
+            2: "Rekap Mata Kuliah & Dosen",
+            3: "Merge Semua Sheet"
+        }
+
+        self.selected_label.config(
+            text="Modul aktif: "
+            + module_names[
+                self.selected_module
+            ]
+        )
+
+        self.status_label.config(
+            text="Status: Siap"
+        )
+
+
+    # ========================================================
+    # PILIH FILE
+    # ========================================================
 
     def choose_file(self):
 
@@ -684,6 +921,10 @@ class ExcelRekapApp:
             )
 
 
+    # ========================================================
+    # PROSES
+    # ========================================================
+
     def process(self):
 
         if not self.input_file:
@@ -695,10 +936,18 @@ class ExcelRekapApp:
 
             return
 
+        initial_names = {
+            1: "Rekap_Mata_Kuliah_dan_Evaluasi.xlsx",
+            2: "Rekap_Mata_Kuliah_dan_Dosen.xlsx",
+            3: "Merge_Semua_Sheet.xlsx"
+        }
+
         output_file = filedialog.asksaveasfilename(
             title="Simpan Hasil Rekap",
             defaultextension=".xlsx",
-            initialfile="Rekap_Mata_Kuliah_dan_Evaluasi.xlsx",
+            initialfile=initial_names[
+                self.selected_module
+            ],
             filetypes=[
                 (
                     "Excel Files",
@@ -718,14 +967,38 @@ class ExcelRekapApp:
 
             self.progress.start(10)
 
-            self.root.update_idletasks()
-
-            process_excel(
-                self.input_file,
-                output_file
+            self.btn_process.config(
+                state="disabled"
             )
 
+            self.root.update_idletasks()
+
+            if self.selected_module == 1:
+
+                process_excel(
+                    self.input_file,
+                    output_file
+                )
+
+            elif self.selected_module == 2:
+
+                process_matkul_dosen(
+                    self.input_file,
+                    output_file
+                )
+
+            elif self.selected_module == 3:
+
+                process_merge_sheets(
+                    self.input_file,
+                    output_file
+                )
+
             self.progress.stop()
+
+            self.btn_process.config(
+                state="normal"
+            )
 
             self.status_label.config(
                 text="Status: Proses berhasil!"
@@ -733,12 +1006,17 @@ class ExcelRekapApp:
 
             messagebox.showinfo(
                 "Berhasil",
-                "Rekap Excel berhasil dibuat!"
+                "Rekap Excel berhasil dibuat!\n\n"
+                + output_file
             )
 
         except Exception as e:
 
             self.progress.stop()
+
+            self.btn_process.config(
+                state="normal"
+            )
 
             self.status_label.config(
                 text="Status: Terjadi kesalahan"
