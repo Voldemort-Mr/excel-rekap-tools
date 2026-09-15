@@ -26,10 +26,9 @@ jobs:
           pyinstaller --onefile --windowed --name Excel_Rekap_Tools excel_rekap_tools.py
 
       - name: Create ZIP
-        powershell: |
-          Compress-Archive `
-            -Path dist/Excel_Rekap_Tools.exe `
-            -DestinationPath Excel_Rekap_Tools.zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/Excel_Rekap_Tools.exe -DestinationPath Excel_Rekap_Tools.zip
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
